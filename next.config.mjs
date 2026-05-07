@@ -1,8 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['playwright', 'cheerio', 'groq-sdk'],
-  },
+  serverExternalPackages: ['playwright-core', '@sparticuz/chromium', 'cheerio', 'groq-sdk'],
 };
 
 export default nextConfig;

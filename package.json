@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "next dev -p 8000",
     "build": "next build",
-    "start": "next start -p 8000",
-    "postinstall": "playwright install chromium"
+    "start": "next start -p 8000"
   },
   "dependencies": {
     "next": "^14.2.0",
@@ -14,6 +13,7 @@
     "react-dom": "^18.2.0",
     "cheerio": "^1.0.0-rc.12",
     "groq-sdk": "^0.7.0",
-    "playwright": "^1.43.0"
+    "playwright-core": "^1.43.0",
+    "@sparticuz/chromium": "^123.0.0"
   }
 }
