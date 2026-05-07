@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "devDependencies": {
     "concurrently": "^9.2.1"
   },
