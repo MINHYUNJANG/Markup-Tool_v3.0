@@ -1391,7 +1391,7 @@ const isValidUrl = (str) => {
 async function safeJson(res) {
   const text = await res.text()
   try { return JSON.parse(text) } catch {
-    throw new Error('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+    throw new Error(`서버 오류 (${res.status}): ${text.slice(0, 200)}`)
   }
 }
 
