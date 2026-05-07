@@ -1,6 +1,6 @@
 import { crawl } from '../../../lib/crawler.js';
 import { mapToTemplate } from '../../../lib/ai-mapper.js';
-import { figmaMarkup } from '../../../lib/figma.js';
+import { figmaMarkupFast } from '../../../lib/figma.js';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -10,7 +10,7 @@ export async function POST(request) {
     const { url, selector = '', template_html } = await request.json();
 
     if (url.includes('figma.com')) {
-      const result = await figmaMarkup(url, 'none', '');
+      const result = await figmaMarkupFast(url);
       return Response.json({ html: result.html });
     }
 
