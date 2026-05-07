@@ -15,6 +15,7 @@ body {
 .app {
   min-height: 100vh;
   overflow-x:clip;
+  width: 100%;
 }
 
 .header {
