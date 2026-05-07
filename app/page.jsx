@@ -1388,6 +1388,13 @@ const isValidUrl = (str) => {
   }
 }
 
+async function safeJson(res) {
+  const text = await res.text()
+  try { return JSON.parse(text) } catch {
+    throw new Error('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+  }
+}
+
 const isValidFigmaUrl = (str) => {
   return /figma\.com\/(file|design|proto)\/[A-Za-z0-9]+/.test(str)
 }
@@ -1402,7 +1409,7 @@ async function apiFigmaMarkup(url, component_type, variant) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, component_type, variant }),
   })
-  const data = await res.json()
+  const data = await safeJson(res)
   if (!res.ok) throw new Error(data.detail || '피그마 마크업 실패')
   return data
 }
@@ -1455,7 +1462,7 @@ async function apiAutoMarkup(url, selector) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, selector }),
   })
-  const data = await res.json()
+  const data = await safeJson(res)
   if (!res.ok) throw new Error(data.detail || '마크업 실패')
   return data
 }
@@ -1470,7 +1477,7 @@ async function apiMarkupFromUrl(url, selector, template_html) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, selector, template_html }),
   })
-  const data = await res.json()
+  const data = await safeJson(res)
   if (!res.ok) throw new Error(data.detail || '크롤링 마크업 실패')
   return data.html
 }
@@ -1485,7 +1492,7 @@ async function apiEditMarkup(html, instruction) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ html, instruction }),
   })
-  const data = await res.json()
+  const data = await safeJson(res)
   if (!res.ok) throw new Error(data.detail || '편집 실패')
   return data.html
 }
@@ -1917,7 +1924,7 @@ function FigmaUrlPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: figmaUrl }),
       })
-      const data = await res.json()
+      const data = await safeJson(res)
       if (!res.ok) throw new Error(data.detail || '마크업 생성 실패')
       setHtmlResult(data.html || '')
       setCssResult(data.css || '')
@@ -2228,7 +2235,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, selector: sel }),
       })
-      const data = await res.json()
+      const data = await safeJson(res)
       if (!res.ok) throw new Error(data.detail || '크롤링 실패')
       setResult(data)
       setActiveTab('text')
