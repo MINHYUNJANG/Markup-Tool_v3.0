@@ -10,7 +10,7 @@ export async function POST(request) {
     const { url, selector = '', template_html } = await request.json();
 
     if (url.includes('figma.com')) {
-      const result = await figmaMarkupFast(url);
+      const result = await figmaMarkupFast(url, template_html);
       return Response.json({ html: result.html });
     }
 
