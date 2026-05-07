@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
-const API_BASE = ''
+const API_BASE = '/api'
 const DEV_MOCK = false
 
 const MOCK_CRAWL = {
