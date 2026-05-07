@@ -1581,6 +1581,7 @@ function MarkupResultPanel({ markup, onMarkupChange, extraCss = false, theme = '
 
   const handleCrawlFill = async () => {
     if (!crawlUrl) return
+    if (isValidFigmaUrl(crawlUrl)) { setCrawlError('Figma URL은 상단 피그마 마크업 탭에서 처리해주세요.'); return }
     setLoadingCrawl(true)
     setCrawlError('')
     try {
@@ -1702,6 +1703,7 @@ function FigmaPanel() {
     if (subVariants.length > 0 && !subVariant) { alert('서브타입을 선택해주세요.'); return }
     if (!crawlUrl) { setCrawlUrlError('URL을 입력해주세요.'); return }
     if (!isValidUrl(crawlUrl)) { setCrawlUrlError('올바른 URL 형식이 아닙니다.'); return }
+    if (isValidFigmaUrl(crawlUrl)) { setCrawlUrlError('Figma URL은 상단 피그마 마크업 탭에서 처리해주세요.'); return }
     setCrawlUrlError('')
     const sel = selectorOverride ?? crawlSelector
     setLoadingCrawl(true)
