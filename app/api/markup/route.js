@@ -5,7 +5,7 @@ import { figmaMarkupFast } from '../../../lib/figma.js';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const TIMEOUT_MS = 9500;
+const TIMEOUT_MS = 30000;
 
 function withTimeout(promise) {
   return Promise.race([
