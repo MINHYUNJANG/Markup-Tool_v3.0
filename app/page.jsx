@@ -1506,7 +1506,7 @@ const THEMES = [
   { value: 'orange', label: '오렌지', color: '#E56C01' },
 ]
 
-function PreviewModal({ markup, onClose, extraCss = false, theme = 'purple' }) {
+function PreviewModal({ markup, onClose, extraCss = false, templateCss = false, theme = 'purple' }) {
   const fontLinks = [
     '/common/font/NotoSansKR/fonts.css',
     '/common/font/Pretendard/fonts.css',
@@ -1520,6 +1520,7 @@ function PreviewModal({ markup, onClose, extraCss = false, theme = 'purple' }) {
     '/basic.css',
     '/con_com.css',
     ...(extraCss ? ['/sub_com.css'] : []),
+    ...(templateCss ? ['/template.css'] : []),
   ].map(href => `<link rel="stylesheet" href="${href}">`).join('\n')
 
   const scripts = [
@@ -1562,7 +1563,7 @@ ${scripts}
   )
 }
 
-function MarkupResultPanel({ markup, onMarkupChange, extraCss = false, theme = 'purple' }) {
+function MarkupResultPanel({ markup, onMarkupChange, extraCss = false, templateCss = false, theme = 'purple' }) {
   const [editPrompt, setEditPrompt] = useState('')
   const [loadingEdit, setLoadingEdit] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -1640,7 +1641,7 @@ function MarkupResultPanel({ markup, onMarkupChange, extraCss = false, theme = '
           </button>
         </div>
       </div>
-      {showPreview && <PreviewModal markup={markup} onClose={() => setShowPreview(false)} extraCss={extraCss} theme={theme} />}
+      {showPreview && <PreviewModal markup={markup} onClose={() => setShowPreview(false)} extraCss={extraCss} templateCss={templateCss} theme={theme} />}
     </div>
   )
 }
@@ -2058,6 +2059,137 @@ ${htmlResult}
   )
 }
 
+function ImageMarkupPanel() {
+  const [imageFile, setImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState('')
+  const [dragging, setDragging] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [markupResult, setMarkupResult] = useState('')
+  const [imageTheme, setImageTheme] = useState('blue')
+  const [error, setError] = useState('')
+  const fileInputRef = useRef(null)
+
+  const handleFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) return
+    setImageFile(file)
+    const reader = new FileReader()
+    reader.onload = (e) => setImagePreview(e.target.result)
+    reader.readAsDataURL(file)
+    setMarkupResult('')
+    setError('')
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setDragging(false)
+    handleFile(e.dataTransfer.files[0])
+  }
+
+  const handleReset = () => {
+    setImageFile(null)
+    setImagePreview('')
+    setMarkupResult('')
+    setError('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleGenerate = async () => {
+    if (!imageFile) return
+    setLoading(true)
+    setError('')
+    setMarkupResult('')
+    try {
+      const formData = new FormData()
+      formData.append('image', imageFile)
+      formData.append('theme', imageTheme)
+      const res = await fetch(`${API_BASE}/image-markup`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await safeJson(res)
+      if (!res.ok) throw new Error(data.detail || '마크업 생성 실패')
+      setMarkupResult(data.markup || '')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="input-section">
+      {!imagePreview ? (
+        <div
+          className={`img-upload-zone${dragging ? ' drag-over' : ''}`}
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+        >
+          <div className="img-upload-icon">↑</div>
+          <p>이미지를 드래그하거나 클릭하여 업로드</p>
+          <p className="img-upload-hint">PNG, JPG, GIF 등 이미지 파일 지원</p>
+        </div>
+      ) : (
+        <div className="img-preview-wrap">
+          <img src={imagePreview} alt="업로드된 이미지" className="img-preview" />
+          <button className="img-reset-btn" onClick={handleReset}>✕ 이미지 제거</button>
+        </div>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={e => handleFile(e.target.files[0])}
+      />
+
+      <div className="img-theme-row">
+        <span className="img-theme-label">테마 색상</span>
+        <div className="img-theme-swatches">
+          {THEMES.map(t => (
+            <button
+              key={t.value}
+              className={`img-theme-swatch${imageTheme === t.value ? ' active' : ''}`}
+              style={{ background: t.color }}
+              title={t.label}
+              onClick={() => setImageTheme(t.value)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="btn-group">
+        <button
+          className="markup-btn"
+          onClick={handleGenerate}
+          disabled={loading || !imageFile}
+        >
+          {loading ? '분석 중...' : '마크업 생성'}
+        </button>
+      </div>
+
+      {error && <div className="error-box">{error}</div>}
+
+      {loading && (
+        <div className="img-loading">
+          <div className="spinner" />
+          <span>이미지 분석 중... (잠시 기다려주세요)</span>
+        </div>
+      )}
+
+      {markupResult && (
+        <MarkupResultPanel
+          markup={markupResult}
+          onMarkupChange={setMarkupResult}
+          templateCss={true}
+          theme={imageTheme}
+        />
+      )}
+    </div>
+  )
+}
+
 const BROWSERS = [
   { id: 'chrome',  label: 'Chrome' },
   { id: 'edge',    label: 'Edge' },
@@ -2322,6 +2454,7 @@ export default function App() {
             <button className={`mode-btn${mode === 'single' ? ' active' : ''}`} onClick={() => setMode('single')}>크롤링 마크업</button>
             <button className={`mode-btn${mode === 'figma' ? ' active' : ''}`} onClick={() => setMode('figma')}>컴포넌트 마크업</button>
             <button className={`mode-btn${mode === 'figma-url' ? ' active' : ''}`} onClick={() => setMode('figma-url')}>피그마 마크업</button>
+            <button className={`mode-btn${mode === 'image-markup' ? ' active' : ''}`} onClick={() => setMode('image-markup')}>이미지 투 마크업</button>
           </div>
           <div className="mode-group mode-group--audit">
             <button className={`mode-btn${mode === 'web-standard' ? ' active' : ''}`} onClick={() => setMode('web-standard')}>웹표준 증적검사</button>
@@ -2442,6 +2575,9 @@ export default function App() {
 
         {/* 피그마 마크업 모드 */}
         {mode === 'figma-url' && <FigmaUrlPanel />}
+
+        {/* 이미지 투 마크업 */}
+        {mode === 'image-markup' && <ImageMarkupPanel />}
 
         {/* 웹표준 증적검사 */}
         {mode === 'web-standard' && <AuditPanel type="standard" />}
