@@ -5,13 +5,13 @@ import { figmaMarkupFast } from '../../../lib/figma.js';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const TIMEOUT_MS = 9000;
+const TIMEOUT_MS = 9500;
 
 function withTimeout(promise) {
   return Promise.race([
     promise,
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('처리 시간이 초과되었습니다. 잠시 후 다시 시도하거나 node-id가 포함된 Figma URL을 사용해주세요.')), TIMEOUT_MS)
+      setTimeout(() => reject(new Error('처리 시간이 초과되었습니다. 파일 복잡도가 높거나 서버 부하가 높습니다. 잠시 후 다시 시도해주세요.')), TIMEOUT_MS)
     ),
   ]);
 }
