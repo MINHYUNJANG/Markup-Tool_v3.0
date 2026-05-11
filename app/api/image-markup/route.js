@@ -251,17 +251,23 @@ role 정확히 사용. 버튼 hid 포함. img alt 반드시 작성.
 
 ━━━ CSS 작성 규칙 ━━━
 • 모든 스타일은 클래스 선택자(.클래스명 { })로만 작성
-• HTML 태그에 style="" 속성 절대 금지 — 위반 시 즉시 수정
+• HTML 태그에 style="" 속성 절대 금지
 • 클래스명 예시: .MC_box1, .MC_box1 .slide-txt, .MC_box2 .card-list li 등 계층 선택자 활용
 • JSON의 모든 bg·color·fontSize·fontWeight·padding·gap·borderRadius·shadow 값을 CSS 클래스에 반영
-• CSS reset: *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-• body { font-family: -apple-system, BlinkMacSystemFont, 'Malgun Gothic', '맑은 고딕', sans-serif; }
+
+[단위 규칙 — 반드시 준수]
+• CSS reset과 font-family는 작성하지 마라 (이미 외부 파일에 포함됨)
+• html 기준 font-size: 20px (1rem = 20px)
+• font-size, padding, margin, gap, line-height, letter-spacing 값은 반드시 rem 단위로 작성
+  예) font-size: 16px → font-size: 0.8rem / padding: 40px → padding: 2rem / gap: 20px → gap: 1rem
+• border-width(1px, 2px 등 얇은 선), box-shadow 수치, border-radius는 px 유지
+• 섹션 컨테이너(.MC_box1, .MC_box2 등 최상위 섹션)의 width가 960px 이상이면 width: 100% 로 작성
 
 ━━━ 출력 형식 (필수 준수) ━━━
 ===HTML===
 (순수 HTML만. style="" 속성 없음. class/id/role/aria/href/src/alt/type 속성만 허용.)
 ===CSS===
-(순수 CSS만. style 태그 없음. 클래스 선택자 기반으로만 작성.)
+(순수 CSS만. style 태그 없음. 클래스 선택자 기반. px→rem 변환 적용.)
 구분자 외 설명·주석·코드블럭 절대 금지.`;
 
 /* ── 파서 ── */
@@ -271,13 +277,46 @@ function parseHtmlCss(raw) {
   const cssMatch  = text.match(/===CSS===\s*([\s\S]*)$/);
   const html = htmlMatch ? htmlMatch[1].trim() : text;
   const css  = cssMatch  ? cssMatch[1].trim()  : '';
-  return { html: stripInlineStyles(html), css };
+  return { html: stripInlineStyles(html), css: transformCss(css) };
 }
 
-/* ── 인라인 style 속성 강제 제거 (AI가 무시할 경우 서버에서 클렌징) ── */
+/* ── 인라인 style 속성 강제 제거 ── */
 function stripInlineStyles(html) {
-  // style="..." 또는 style='...' 속성 제거
   return html.replace(/\s+style\s*=\s*(?:"[^"]*"|'[^']*')/gi, '');
+}
+
+/* ── CSS 후처리: px→rem 변환 + 대형 width→100% ── */
+function transformCss(css) {
+  const BASE = 20; // html { font-size: 20px }
+
+  // 1. 섹션 컨테이너의 960px 이상 width → 100%
+  css = css.replace(/\bwidth\s*:\s*(\d+)px/g, (_, n) =>
+    parseInt(n, 10) >= 960 ? 'width: 100%' : `width: ${n}px`
+  );
+
+  // 2. rem 변환 대상 속성
+  const remProps = [
+    'font-size', 'line-height', 'letter-spacing',
+    'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+    'margin',  'margin-top',  'margin-right',  'margin-bottom',  'margin-left',
+    'gap', 'row-gap', 'column-gap',
+    'top', 'right', 'bottom', 'left',
+  ];
+  const propPattern = remProps.map(p => p.replace(/-/g, '\\-')).join('|');
+  const propRegex = new RegExp(`\\b(${propPattern})\\s*:\\s*([^;{}\\n]+)`, 'gi');
+
+  css = css.replace(propRegex, (match, prop, value) => {
+    const converted = value.replace(/(\d+(?:\.\d+)?)px/g, (_, n) => {
+      const num = parseFloat(n);
+      if (num === 0) return '0';
+      if (num <= 1) return `${n}px`; // 1px 이하는 유지
+      const rem = +(num / BASE).toFixed(4).replace(/\.?0+$/, '');
+      return `${rem}rem`;
+    });
+    return `${prop}: ${converted}`;
+  });
+
+  return css;
 }
 
 export async function POST(req) {
