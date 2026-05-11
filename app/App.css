@@ -463,6 +463,12 @@ body {
   margin-bottom: 12px;
 }
 
+.audit-url-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .audit-url-row {
   display: flex;
   align-items: center;
@@ -531,10 +537,411 @@ body {
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s;
-  width: 100%;
+  flex: 1;
 }
 .audit-run-btn:hover:not(:disabled) { background: #0f766e; }
 .audit-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.audit-download-btn {
+  background: #1e40af;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.audit-download-btn:hover:not(:disabled) { background: #1d4ed8; }
+.audit-download-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 검사 진행 바 */
+.audit-progress-wrap {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.audit-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.audit-progress-phase {
+  font-weight: 600;
+  color: #0d9488;
+}
+
+.audit-progress-count {
+  color: #888;
+}
+
+.audit-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.audit-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0d9488, #14b8a6);
+  border-radius: 99px;
+  transition: width 0.3s ease;
+  min-width: 4px;
+}
+
+/* W3C 검사 결과 */
+.audit-url-result-wrap {
+  padding-left: 32px;
+}
+
+.audit-w3c-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #0d9488;
+  padding: 8px 0;
+}
+
+.audit-w3c-fetch-error {
+  font-size: 12px;
+  color: #e53e3e;
+  padding: 6px 0;
+}
+
+.audit-w3c-result {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.audit-w3c-summary {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #f8fafc;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.audit-w3c-summary:hover { background: #f0fdfa; }
+
+.audit-w3c-ok {
+  font-size: 13px;
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.audit-w3c-tag {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.audit-w3c-tag--error { background: #fee2e2; color: #dc2626; }
+.audit-w3c-tag--warning { background: #fef9c3; color: #ca8a04; }
+.audit-w3c-tag--info { background: #dbeafe; color: #2563eb; }
+
+.audit-w3c-chevron {
+  margin-left: auto;
+  font-size: 11px;
+  color: #aaa;
+}
+
+.audit-w3c-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border-top: 1px solid #e2e8f0;
+}
+
+.audit-w3c-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+}
+.audit-w3c-msg:last-child { border-bottom: none; }
+.audit-w3c-msg--error { background: #fff8f8; }
+.audit-w3c-msg--warning { background: #fffef0; }
+.audit-w3c-msg--info { background: #f0f8ff; }
+
+.audit-w3c-msg-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-top: 1px;
+}
+.audit-w3c-msg--error .audit-w3c-msg-badge { background: #fee2e2; color: #dc2626; }
+.audit-w3c-msg--warning .audit-w3c-msg-badge { background: #fef9c3; color: #ca8a04; }
+.audit-w3c-msg--info .audit-w3c-msg-badge { background: #dbeafe; color: #2563eb; }
+
+.audit-w3c-msg-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.audit-w3c-msg-text {
+  margin: 0;
+  color: #1e293b;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.audit-w3c-msg-loc {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.audit-w3c-msg-extract {
+  display: block;
+  font-size: 11px;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 60px;
+  overflow: hidden;
+}
+
+.audit-w3c-empty {
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #888;
+  margin: 0;
+}
+
+/* W3C 증적 스크린샷 */
+.audit-w3c-evidence {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid #e2e8f0;
+  background: #f0fdf4;
+}
+
+.audit-w3c-evidence-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #16a34a;
+  margin-top: 4px;
+}
+
+.audit-w3c-evidence-thumb {
+  width: 160px;
+  height: auto;
+  border-radius: 6px;
+  border: 1.5px solid #bbf7d0;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  display: block;
+}
+.audit-w3c-evidence-thumb:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+}
+
+/* 대처방법 */
+.audit-w3c-remediation {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-left: 3px solid #0d9488;
+  border-radius: 0 6px 6px 0;
+}
+
+.audit-w3c-rem-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.audit-w3c-rem-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-top: 1px;
+}
+.audit-w3c-rem-label--problem { background: #fef3c7; color: #92400e; }
+.audit-w3c-rem-label--fix { background: #d1fae5; color: #065f46; }
+
+.audit-w3c-rem-text {
+  margin: 0;
+  font-size: 12px;
+  color: #334155;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.audit-w3c-rem-pre {
+  font-family: 'Consolas', 'Menlo', monospace;
+  white-space: pre-wrap;
+  background: none;
+  padding: 0;
+  border: none;
+}
+
+/* 썸네일 행 */
+.audit-thumb-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-left: 32px;
+}
+
+.audit-thumb-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.audit-thumb-img {
+  width: 96px;
+  height: 64px;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 6px;
+  border: 1.5px solid #99f6e4;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.audit-thumb-img:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+}
+
+.audit-thumb-skeleton {
+  width: 96px;
+  height: 64px;
+  border-radius: 6px;
+  background: #e6faf8;
+  border: 1.5px dashed #99f6e4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.audit-thumb-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid #99f6e4;
+  border-top-color: #0d9488;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.audit-thumb-error {
+  width: 96px;
+  height: 64px;
+  border-radius: 6px;
+  background: #fff5f5;
+  border: 1.5px solid #feb2b2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e53e3e;
+  font-size: 18px;
+  cursor: default;
+}
+
+.audit-thumb-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+}
+
+/* 라이트박스 */
+.audit-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.audit-lightbox-inner {
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+
+.audit-lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f0fdfa;
+  border-bottom: 1px solid #ccfbf1;
+  gap: 16px;
+}
+
+.audit-lightbox-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0d9488;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-lightbox-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #888;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.audit-lightbox-close:hover { background: #fee2e2; color: #e53e3e; }
+
+.audit-lightbox-img {
+  display: block;
+  max-width: 88vw;
+  max-height: calc(90vh - 56px);
+  object-fit: contain;
+}
 
 /* 일괄 모드 입력 */
 .batch-header-row {
