@@ -1506,33 +1506,47 @@ const THEMES = [
   { value: 'orange', label: '오렌지', color: '#E56C01' },
 ]
 
-function PreviewModal({ markup, onClose, extraCss = false, templateCss = false, theme = 'purple' }) {
-  const fontLinks = [
-    '/common/font/NotoSansKR/fonts.css',
-    '/common/font/Pretendard/fonts.css',
-    '/common/font/Montserrat/fonts.css',
-    '/common/font/TitilliumWeb/fonts.css',
-    '/common/font/remixIcon/remixicon.css',
-  ].map(href => `<link rel="stylesheet" href="${href}">`).join('\n')
+function PreviewModal({ markup, onClose, extraCss = false, templateCss = false, theme = 'purple', selfContained = false }) {
+  let html
 
-  const cssLinks = [
-    '/theme.css',
-    '/basic.css',
-    '/con_com.css',
-    ...(extraCss ? ['/sub_com.css'] : []),
-    ...(templateCss ? ['/template.css'] : []),
-  ].map(href => `<link rel="stylesheet" href="${href}">`).join('\n')
+  if (selfContained) {
+    html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0">
+${markup}
+</body>
+</html>`
+  } else {
+    const fontLinks = [
+      '/common/font/NotoSansKR/fonts.css',
+      '/common/font/Pretendard/fonts.css',
+      '/common/font/Montserrat/fonts.css',
+      '/common/font/TitilliumWeb/fonts.css',
+      '/common/font/remixIcon/remixicon.css',
+    ].map(href => `<link rel="stylesheet" href="${href}">`).join('\n')
 
-  const scripts = [
-    '/common/js/jquery.min.js',
-    '/common/js/swiper/swiper.min.js',
-    '/common/js/common.js',
-    '/common/js/con_com.js',
-  ].map(src => `<script src="${src}"></script>`).join('\n')
+    const cssLinks = [
+      '/theme.css',
+      '/basic.css',
+      '/con_com.css',
+      ...(extraCss ? ['/sub_com.css'] : []),
+      ...(templateCss ? ['/template.css'] : []),
+    ].map(href => `<link rel="stylesheet" href="${href}">`).join('\n')
 
-  const body = `<div id="wrap" data-theme="${theme}" style="padding:2rem">\n${markup}\n</div>`
+    const scripts = [
+      '/common/js/jquery.min.js',
+      '/common/js/swiper/swiper.min.js',
+      '/common/js/common.js',
+      '/common/js/con_com.js',
+    ].map(src => `<script src="${src}"></script>`).join('\n')
 
-  const html = `<!DOCTYPE html>
+    const body = `<div id="wrap" data-theme="${theme}" style="padding:2rem">\n${markup}\n</div>`
+
+    html = `<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -1546,6 +1560,7 @@ ${body}
 ${scripts}
 </body>
 </html>`
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -1563,7 +1578,7 @@ ${scripts}
   )
 }
 
-function MarkupResultPanel({ markup, onMarkupChange, extraCss = false, templateCss = false, theme = 'purple' }) {
+function MarkupResultPanel({ markup, onMarkupChange, extraCss = false, templateCss = false, theme = 'purple', selfContained = false }) {
   const [editPrompt, setEditPrompt] = useState('')
   const [loadingEdit, setLoadingEdit] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -1641,7 +1656,7 @@ function MarkupResultPanel({ markup, onMarkupChange, extraCss = false, templateC
           </button>
         </div>
       </div>
-      {showPreview && <PreviewModal markup={markup} onClose={() => setShowPreview(false)} extraCss={extraCss} templateCss={templateCss} theme={theme} />}
+      {showPreview && <PreviewModal markup={markup} onClose={() => setShowPreview(false)} extraCss={extraCss} templateCss={templateCss} theme={theme} selfContained={selfContained} />}
     </div>
   )
 }
@@ -2064,10 +2079,36 @@ function ImageMarkupPanel() {
   const [imagePreview, setImagePreview] = useState('')
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [markupResult, setMarkupResult] = useState('')
-  const [imageTheme, setImageTheme] = useState('blue')
+  const [markupHtml, setMarkupHtml] = useState('')
+  const [markupCss, setMarkupCss] = useState('')
+  const [activeTab, setActiveTab] = useState('html')
+  const [copied, setCopied] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
   const [error, setError] = useState('')
+  const [loadingStep, setLoadingStep] = useState(0)
   const fileInputRef = useRef(null)
+
+  const LOADING_STEPS = [
+    '1단계: 시안 스캔 중...',
+    '2단계: 시안 원본과 대조 검증 중...',
+    '3단계: 마크업 & CSS 생성 중...',
+  ]
+
+  const hasResult = !!(markupHtml || markupCss)
+
+  const previewDoc = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+${markupCss}
+</style>
+</head>
+<body style="margin:0">
+${markupHtml}
+</body>
+</html>`
 
   const handleFile = (file) => {
     if (!file || !file.type.startsWith('image/')) return
@@ -2075,7 +2116,8 @@ function ImageMarkupPanel() {
     const reader = new FileReader()
     reader.onload = (e) => setImagePreview(e.target.result)
     reader.readAsDataURL(file)
-    setMarkupResult('')
+    setMarkupHtml('')
+    setMarkupCss('')
     setError('')
   }
 
@@ -2088,30 +2130,48 @@ function ImageMarkupPanel() {
   const handleReset = () => {
     setImageFile(null)
     setImagePreview('')
-    setMarkupResult('')
+    setMarkupHtml('')
+    setMarkupCss('')
     setError('')
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleCopy = () => {
+    const content = activeTab === 'html' ? markupHtml : markupCss
+    navigator.clipboard.writeText(content)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const handleGenerate = async () => {
     if (!imageFile) return
     setLoading(true)
+    setLoadingStep(0)
     setError('')
-    setMarkupResult('')
+    setMarkupHtml('')
+    setMarkupCss('')
+
+    // 단계별 메시지 전환 (스캔 ~15s → 검증 ~15s → 생성)
+    const stepTimer = setTimeout(() => setLoadingStep(1), 15000)
+    const stepTimer2 = setTimeout(() => setLoadingStep(2), 30000)
+
     try {
       const formData = new FormData()
       formData.append('image', imageFile)
-      formData.append('theme', imageTheme)
       const res = await fetch(`${API_BASE}/image-markup`, {
         method: 'POST',
         body: formData,
       })
       const data = await safeJson(res)
       if (!res.ok) throw new Error(data.detail || '마크업 생성 실패')
-      setMarkupResult(data.markup || '')
+      setMarkupHtml(data.html || '')
+      setMarkupCss(data.css || '')
+      setActiveTab('html')
     } catch (e) {
       setError(e.message)
     } finally {
+      clearTimeout(stepTimer)
+      clearTimeout(stepTimer2)
       setLoading(false)
     }
   }
@@ -2144,21 +2204,6 @@ function ImageMarkupPanel() {
         onChange={e => handleFile(e.target.files[0])}
       />
 
-      <div className="img-theme-row">
-        <span className="img-theme-label">테마 색상</span>
-        <div className="img-theme-swatches">
-          {THEMES.map(t => (
-            <button
-              key={t.value}
-              className={`img-theme-swatch${imageTheme === t.value ? ' active' : ''}`}
-              style={{ background: t.color }}
-              title={t.label}
-              onClick={() => setImageTheme(t.value)}
-            />
-          ))}
-        </div>
-      </div>
-
       <div className="btn-group">
         <button
           className="markup-btn"
@@ -2174,17 +2219,60 @@ function ImageMarkupPanel() {
       {loading && (
         <div className="img-loading">
           <div className="spinner" />
-          <span>이미지 분석 중... (잠시 기다려주세요)</span>
+          <div className="img-loading-steps">
+            {LOADING_STEPS.map((msg, i) => (
+              <span
+                key={i}
+                className={`img-loading-step${i === loadingStep ? ' active' : ''}${i < loadingStep ? ' done' : ''}`}
+              >
+                {i < loadingStep ? '✓ ' : i === loadingStep ? '▶ ' : '○ '}{msg}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
-      {markupResult && (
-        <MarkupResultPanel
-          markup={markupResult}
-          onMarkupChange={setMarkupResult}
-          templateCss={true}
-          theme={imageTheme}
-        />
+      {hasResult && (
+        <div className="markup-result">
+          <div className="img-code-tabbar">
+            <div className="img-code-tabs">
+              <button
+                className={`img-code-tab${activeTab === 'html' ? ' active' : ''}`}
+                onClick={() => setActiveTab('html')}
+              >HTML</button>
+              <button
+                className={`img-code-tab${activeTab === 'css' ? ' active' : ''}`}
+                onClick={() => setActiveTab('css')}
+              >CSS</button>
+            </div>
+            <div className="markup-actions">
+              <button className={`copy-btn${copied ? ' copied' : ''}`} onClick={handleCopy}>
+                {copied ? '복사됨 ✓' : '복사'}
+              </button>
+              <button className="preview-btn" onClick={() => setShowPreview(true)}>미리보기</button>
+            </div>
+          </div>
+          <textarea
+            className="markup-editor"
+            value={activeTab === 'html' ? markupHtml : markupCss}
+            onChange={e => activeTab === 'html'
+              ? setMarkupHtml(e.target.value)
+              : setMarkupCss(e.target.value)}
+            spellCheck={false}
+          />
+        </div>
+      )}
+
+      {showPreview && hasResult && (
+        <div className="modal-overlay" onClick={() => setShowPreview(false)}>
+          <div className="modal-container" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <span>미리보기 (HTML + CSS)</span>
+              <button className="modal-close" onClick={() => setShowPreview(false)}>✕</button>
+            </div>
+            <iframe className="modal-iframe" srcDoc={previewDoc} />
+          </div>
+        </div>
       )}
     </div>
   )
