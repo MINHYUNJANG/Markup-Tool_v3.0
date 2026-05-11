@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
+import { getRemediation } from '../lib/w3c-remediation.js'
 
 const API_BASE = '/api'
 const DEV_MOCK = false
@@ -2289,6 +2290,93 @@ const BROWSERS = [
   { id: 'android', label: 'Android' },
 ]
 
+function W3cResult({ validation, onToggle, onOpenLightbox }) {
+  if (!validation || validation.loading) {
+    return (
+      <div className="audit-w3c-loading">
+        <span className="audit-thumb-spinner" />
+        <span>W3C 검사 중...</span>
+      </div>
+    )
+  }
+  if (validation.error) {
+    return <div className="audit-w3c-fetch-error">검사 실패: {validation.error}</div>
+  }
+  const msgs = validation.messages ?? []
+  const errors = msgs.filter(m => m.type === 'error')
+  const warnings = msgs.filter(m => m.type === 'warning' || m.subType === 'warning')
+  const infos = msgs.filter(m => m.type === 'info' && m.subType !== 'warning')
+  return (
+    <div className="audit-w3c-result">
+      <button className="audit-w3c-summary" onClick={onToggle}>
+        {errors.length === 0 && warnings.length === 0 ? (
+          <span className="audit-w3c-ok">오류 없음 ✓</span>
+        ) : (
+          <>
+            {errors.length > 0 && <span className="audit-w3c-tag audit-w3c-tag--error">오류 {errors.length}</span>}
+            {warnings.length > 0 && <span className="audit-w3c-tag audit-w3c-tag--warning">경고 {warnings.length}</span>}
+            {infos.length > 0 && <span className="audit-w3c-tag audit-w3c-tag--info">정보 {infos.length}</span>}
+          </>
+        )}
+        <span className="audit-w3c-chevron">{validation.open ? '▲' : '▼'}</span>
+      </button>
+      {validation.open && msgs.length > 0 && (
+        <ul className="audit-w3c-list">
+          {msgs.map((msg, i) => {
+            const isErr = msg.type === 'error'
+            const isWarn = msg.type === 'warning' || msg.subType === 'warning'
+            const typeClass = isErr ? 'error' : isWarn ? 'warning' : 'info'
+            const typeLabel = isErr ? '오류' : isWarn ? '경고' : '정보'
+            const remediation = getRemediation(msg.message)
+            return (
+              <li key={i} className={`audit-w3c-msg audit-w3c-msg--${typeClass}`}>
+                <span className="audit-w3c-msg-badge">{typeLabel}</span>
+                <div className="audit-w3c-msg-body">
+                  <p className="audit-w3c-msg-text">{msg.message}</p>
+                  {(msg.lastLine != null) && (
+                    <span className="audit-w3c-msg-loc">줄 {msg.lastLine}{msg.firstColumn != null ? `, 열 ${msg.firstColumn}` : ''}</span>
+                  )}
+                  {msg.extract && (
+                    <code className="audit-w3c-msg-extract">{msg.extract}</code>
+                  )}
+                  {remediation && (
+                    <div className="audit-w3c-remediation">
+                      <div className="audit-w3c-rem-row">
+                        <span className="audit-w3c-rem-label audit-w3c-rem-label--problem">문제</span>
+                        <p className="audit-w3c-rem-text">{remediation.problem}</p>
+                      </div>
+                      <div className="audit-w3c-rem-row">
+                        <span className="audit-w3c-rem-label audit-w3c-rem-label--fix">조치</span>
+                        <pre className="audit-w3c-rem-text audit-w3c-rem-pre">{remediation.fix}</pre>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {validation.open && msgs.length === 0 && (
+        <>
+          <p className="audit-w3c-empty">검사 결과 메시지가 없습니다.</p>
+          {validation.validatorScreenshot && (
+            <div className="audit-w3c-evidence">
+              <span className="audit-w3c-evidence-label">W3C 검사 결과 화면</span>
+              <img
+                className="audit-w3c-evidence-thumb"
+                src={`data:image/png;base64,${validation.validatorScreenshot}`}
+                alt="W3C validator 결과 캡쳐"
+                onClick={() => onOpenLightbox(`data:image/png;base64,${validation.validatorScreenshot}`)}
+              />
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 function AuditPanel({ type }) {
   const isStandard = type === 'standard'
   const title = isStandard ? '웹표준 증적검사' : '웹접근성 증적검사'
@@ -2300,6 +2388,10 @@ function AuditPanel({ type }) {
     Array.from({ length: 5 }, (_, i) => ({ id: i + 1, value: '' }))
   )
   const [loading, setLoading] = useState(false)
+  const [auditProgress, setAuditProgress] = useState({ done: 0, total: 0, phase: '' })
+  const [validations, setValidations] = useState({})
+  const [screenshots, setScreenshots] = useState({})
+  const [lightbox, setLightbox] = useState(null)
   const nextId = useRef(6)
 
   const toggleBrowser = (id) =>
@@ -2317,22 +2409,204 @@ function AuditPanel({ type }) {
   const removeUrl = (id) => {
     if (urls.length <= 1) return
     setUrls(prev => prev.filter(u => u.id !== id))
+    setValidations(prev => { const n = { ...prev }; delete n[id]; return n })
+    setScreenshots(prev => {
+      const next = { ...prev }
+      BROWSERS.forEach(b => delete next[`${id}-${b.id}`])
+      return next
+    })
   }
 
   const updateUrl = (id, value) => {
     setUrls(prev => prev.map(u => u.id === id ? { ...u, value } : u))
   }
 
+  const toggleValidationOpen = (id) => {
+    setValidations(prev => ({
+      ...prev,
+      [id]: { ...prev[id], open: !prev[id]?.open },
+    }))
+  }
+
   const hasAnyUrl = urls.some(u => u.value.trim())
+  const hasAnyResult = Object.values(validations).some(v => !v.loading && v.messages !== null)
   const allChecked = BROWSERS.every(b => browsers[b.id])
   const someChecked = BROWSERS.some(b => browsers[b.id])
 
   const handleAudit = async () => {
     if (!hasAnyUrl) return
+    const activeUrls = urls.filter(u => u.value.trim())
+    const selectedBrowsers = isStandard ? BROWSERS.filter(b => browsers[b.id]) : []
+    if (isStandard && selectedBrowsers.length === 0) {
+      alert('브라우저를 1개 이상 선택해주세요.')
+      return
+    }
+    const totalScreenshots = activeUrls.length * selectedBrowsers.length
+    const grandTotal = activeUrls.length + totalScreenshots
     setLoading(true)
-    // TODO: 검사 API 연동
-    await new Promise(r => setTimeout(r, 800))
+    setAuditProgress({ done: 0, total: grandTotal, phase: 'W3C 검사 중' })
+
+    // W3C 검사 로딩 초기화
+    setValidations(prev => {
+      const patch = {}
+      activeUrls.forEach(u => { patch[u.id] = { loading: true, messages: null, error: null, open: false } })
+      return { ...prev, ...patch }
+    })
+
+    // 스크린샷 로딩 초기화 (브라우저 선택된 경우)
+    if (selectedBrowsers.length > 0) {
+      setScreenshots(prev => {
+        const patch = {}
+        activeUrls.forEach(u => {
+          selectedBrowsers.forEach(b => {
+            patch[`${u.id}-${b.id}`] = { dataUrl: null, loading: true, error: null, label: b.label }
+          })
+        })
+        return { ...prev, ...patch }
+      })
+    }
+
+    // W3C 검사 병렬 실행
+    let w3cDone = 0
+    await Promise.all(
+      activeUrls.map(async (u) => {
+        try {
+          const res = await fetch('/api/w3c', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: u.value.trim() }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.detail || 'W3C 검사 실패')
+          setValidations(prev => ({
+            ...prev,
+            [u.id]: {
+              loading: false,
+              messages: data.messages ?? [],
+              error: null,
+              open: false,
+              validatorScreenshot: data.validatorScreenshot ?? null,
+            },
+          }))
+        } catch (e) {
+          setValidations(prev => ({
+            ...prev,
+            [u.id]: { loading: false, messages: null, error: e.message, open: false },
+          }))
+        } finally {
+          w3cDone++
+          setAuditProgress({ done: w3cDone, total: grandTotal, phase: 'W3C 검사 중' })
+        }
+      })
+    )
+
+    // 스크린샷 배치 실행
+    if (selectedBrowsers.length > 0) {
+      const tasks = []
+      activeUrls.forEach(u => {
+        selectedBrowsers.forEach(b => {
+          tasks.push({ urlId: u.id, url: u.value.trim(), browserId: b.id, label: b.label })
+        })
+      })
+      let shotDone = 0
+      const BATCH = 3
+      for (let i = 0; i < tasks.length; i += BATCH) {
+        await Promise.all(
+          tasks.slice(i, i + BATCH).map(async ({ urlId, url, browserId, label }) => {
+            const key = `${urlId}-${browserId}`
+            try {
+              const res = await fetch('/api/screenshot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, browser: browserId }),
+              })
+              const data = await res.json()
+              if (!res.ok) throw new Error(data.detail || '캡쳐 실패')
+              setScreenshots(prev => ({
+                ...prev,
+                [key]: { dataUrl: `data:image/png;base64,${data.image}`, loading: false, error: null, label },
+              }))
+            } catch (e) {
+              setScreenshots(prev => ({
+                ...prev,
+                [key]: { dataUrl: null, loading: false, error: e.message, label },
+              }))
+            } finally {
+              shotDone++
+              setAuditProgress({ done: activeUrls.length + shotDone, total: grandTotal, phase: '스크린샷 캡처 중' })
+            }
+          })
+        )
+      }
+    }
+
     setLoading(false)
+    setAuditProgress({ done: 0, total: 0, phase: '' })
+  }
+
+  const handleDownload = async () => {
+    const activeUrls = urls.filter(u => u.value.trim())
+    if (!activeUrls.length) return
+
+    const selectedBrowsers = isStandard ? BROWSERS.filter(b => browsers[b.id]) : []
+    const items = []
+
+    for (const u of activeUrls) {
+      const val = validations[u.id]
+      const messages = val?.messages ?? []
+      const errCount = messages.filter(m => m.type === 'error').length
+      const warnCount = messages.filter(m => m.type === 'warning' || m.type === 'info').length
+      const validatorSs = val?.validatorScreenshot ?? null
+
+      if (selectedBrowsers.length === 0) {
+        items.push({
+          url: u.value.trim(),
+          browser: '',
+          w3c_error_count: errCount,
+          w3c_warning_count: warnCount,
+          validator_screenshot: validatorSs,
+          screenshot: null,
+        })
+      } else {
+        for (const b of selectedBrowsers) {
+          const shot = screenshots[`${u.id}-${b.id}`]
+          const shotB64 = shot?.dataUrl
+            ? shot.dataUrl.replace('data:image/png;base64,', '')
+            : null
+          items.push({
+            url: u.value.trim(),
+            browser: b.id,
+            w3c_error_count: errCount,
+            w3c_warning_count: warnCount,
+            validator_screenshot: validatorSs,
+            screenshot: shotB64,
+          })
+        }
+      }
+    }
+
+    try {
+      const res = await fetch('/api/download-hwpx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(`다운로드 실패: ${data.detail || res.statusText}`)
+        return
+      }
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = 'webstandard_inspection.hwpx'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(a.href)
+    } catch (e) {
+      alert(`오류: ${e.message}`)
+    }
   }
 
   return (
@@ -2342,7 +2616,7 @@ function AuditPanel({ type }) {
       {isStandard && (
         <div className="audit-browser-section">
           <div className="audit-browser-header">
-            <span className="audit-browser-label">브라우저 선택</span>
+            <span className="audit-browser-label">브라우저 캡쳐</span>
             <label className="audit-browser-all">
               <input
                 type="checkbox"
@@ -2369,22 +2643,66 @@ function AuditPanel({ type }) {
       )}
 
       <div className="audit-url-list">
-        {urls.map((u, i) => (
-          <div key={u.id} className="audit-url-row">
-            <span className="audit-url-num">{i + 1}</span>
-            <input
-              type="text"
-              className="audit-url-input"
-              value={u.value}
-              onChange={e => updateUrl(u.id, e.target.value)}
-              placeholder="검사할 URL을 입력하세요."
-              onKeyDown={e => e.key === 'Enter' && !loading && handleAudit()}
-            />
-            {urls.length > 1 && (
-              <button className="audit-url-remove" onClick={() => removeUrl(u.id)} title="삭제">✕</button>
-            )}
-          </div>
-        ))}
+        {urls.map((u, i) => {
+          const validation = validations[u.id]
+          const urlShots = BROWSERS
+            .map(b => ({ ...b, shot: screenshots[`${u.id}-${b.id}`] }))
+            .filter(b => b.shot)
+          return (
+            <div key={u.id} className="audit-url-item">
+              <div className="audit-url-row">
+                <span className="audit-url-num">{i + 1}</span>
+                <input
+                  type="text"
+                  className="audit-url-input"
+                  value={u.value}
+                  onChange={e => updateUrl(u.id, e.target.value)}
+                  placeholder="검사할 URL을 입력하세요."
+                  onKeyDown={e => e.key === 'Enter' && !loading && handleAudit()}
+                />
+                {urls.length > 1 && (
+                  <button className="audit-url-remove" onClick={() => removeUrl(u.id)} title="삭제">✕</button>
+                )}
+              </div>
+
+              {validation && (
+                <div className="audit-url-result-wrap">
+                  <W3cResult
+                    validation={validation}
+                    onToggle={() => toggleValidationOpen(u.id)}
+                    onOpenLightbox={(dataUrl) => setLightbox({ dataUrl, label: 'W3C 검사 결과', url: u.value })}
+                  />
+                </div>
+              )}
+
+              {urlShots.length > 0 && (
+                <div className="audit-thumb-row">
+                  {urlShots.map(b => (
+                    <div key={b.id} className="audit-thumb-item">
+                      {b.shot.loading ? (
+                        <div className="audit-thumb-skeleton">
+                          <span className="audit-thumb-spinner" />
+                        </div>
+                      ) : b.shot.error ? (
+                        <div className="audit-thumb-error" title={b.shot.error}>
+                          <span>✕</span>
+                        </div>
+                      ) : (
+                        <img
+                          className="audit-thumb-img"
+                          src={b.shot.dataUrl}
+                          alt={`${b.label} 캡쳐`}
+                          onClick={() => setLightbox({ dataUrl: b.shot.dataUrl, label: b.label, url: u.value })}
+                        />
+                      )}
+                      <span className="audit-thumb-label">{b.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       <button className="audit-add-btn" onClick={addUrl}>+ URL 추가</button>
@@ -2393,11 +2711,47 @@ function AuditPanel({ type }) {
         <button
           className="audit-run-btn"
           onClick={handleAudit}
-          disabled={loading || !hasAnyUrl}
+          disabled={loading || !hasAnyUrl || (isStandard && !someChecked)}
         >
-          {loading ? '검사 중...' : '검사 진행'}
+          {loading ? '검사 중...' : '검사 시작'}
         </button>
+        {isStandard && hasAnyResult && (
+          <button
+            className="audit-download-btn"
+            onClick={handleDownload}
+            disabled={loading}
+          >
+            파일 다운로드
+          </button>
+        )}
       </div>
+
+      {loading && auditProgress.total > 0 && (
+        <div className="audit-progress-wrap">
+          <div className="audit-progress-header">
+            <span className="audit-progress-phase">{auditProgress.phase}</span>
+            <span className="audit-progress-count">{auditProgress.done} / {auditProgress.total}</span>
+          </div>
+          <div className="audit-progress-bar">
+            <div
+              className="audit-progress-fill"
+              style={{ width: `${Math.round(auditProgress.done / auditProgress.total * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {lightbox && (
+        <div className="audit-lightbox" onClick={() => setLightbox(null)}>
+          <div className="audit-lightbox-inner" onClick={e => e.stopPropagation()}>
+            <div className="audit-lightbox-header">
+              <span className="audit-lightbox-title">{lightbox.label} — {lightbox.url}</span>
+              <button className="audit-lightbox-close" onClick={() => setLightbox(null)}>✕</button>
+            </div>
+            <img className="audit-lightbox-img" src={lightbox.dataUrl} alt="캡쳐 전체 보기" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
