@@ -32,9 +32,8 @@ async function callGemini(apiKey, systemText, userParts, maxTokens = 8192) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
-/* ── Groq 폴백 호출 ── */
+/* ── Groq 폴백 호출 (TPM 초과 시 자동 재시도) ── */
 async function callGroq(apiKey, systemPrompt, userParts, maxTokens = 8192) {
-  // userParts: [{ inlineData }, { text }] → Groq 형식으로 변환
   const imagePart = userParts.find(p => p.inlineData);
   const textPart  = userParts.find(p => p.text);
   const content = [
@@ -42,26 +41,44 @@ async function callGroq(apiKey, systemPrompt, userParts, maxTokens = 8192) {
     { type: 'text', text: textPart?.text ?? '' },
   ];
 
+  // 에러 메시지에서 재시도 대기 시간 추출 (e.g. "try again in 5.34s")
+  function parseRetryDelay(msg = '') {
+    const m = msg.match(/try again in\s+([\d.]+)s/i);
+    return m ? Math.ceil(parseFloat(m[1]) * 1000) + 500 : null;
+  }
+
   let lastErr;
   for (const model of GROQ_MODELS) {
-    try {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          max_tokens: maxTokens,
-          temperature: 0,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user',   content },
-          ],
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) { lastErr = new Error(data?.error?.message || `Groq ${res.status}`); continue; }
-      return data.choices?.[0]?.message?.content ?? '';
-    } catch (e) { lastErr = e; }
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model, max_tokens: maxTokens, temperature: 0,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user',   content },
+            ],
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const msg = data?.error?.message || `Groq ${res.status}`;
+          lastErr = new Error(msg);
+          // TPM(분당) 초과 → 대기 후 재시도
+          if (res.status === 429 && msg.includes('per minute')) {
+            const delay = parseRetryDelay(msg) ?? 8000;
+            console.warn(`[image-markup] Groq TPM 초과, ${delay}ms 후 재시도...`);
+            await new Promise(r => setTimeout(r, delay));
+            continue;
+          }
+          // TPD(일일) 초과 → 다음 모델로
+          break;
+        }
+        return data.choices?.[0]?.message?.content ?? '';
+      } catch (e) { lastErr = e; break; }
+    }
   }
   throw lastErr ?? new Error('Groq 모든 모델 실패');
 }
