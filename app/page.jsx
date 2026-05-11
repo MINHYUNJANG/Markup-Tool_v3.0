@@ -2394,13 +2394,18 @@ function AuditPanel({ type }) {
   const [lightbox, setLightbox] = useState(null)
   const nextId = useRef(6)
 
-  const toggleBrowser = (id) =>
-    setBrowsers(prev => ({ ...prev, [id]: !prev[id] }))
+  const MAX_BROWSERS = 5
 
-  const toggleAll = () => {
-    const allChecked = BROWSERS.every(b => browsers[b.id])
-    setBrowsers(Object.fromEntries(BROWSERS.map(b => [b.id, !allChecked])))
+  const toggleBrowser = (id) => {
+    const currentCount = BROWSERS.filter(b => browsers[b.id]).length
+    const isChecked = browsers[id]
+    if (!isChecked && currentCount >= MAX_BROWSERS) {
+      alert(`브라우저는 최대 ${MAX_BROWSERS}개까지 선택 가능합니다.`)
+      return
+    }
+    setBrowsers(prev => ({ ...prev, [id]: !prev[id] }))
   }
+
 
   const addUrl = () => {
     setUrls(prev => [...prev, { id: nextId.current++, value: '' }])
@@ -2430,8 +2435,6 @@ function AuditPanel({ type }) {
 
   const hasAnyUrl = urls.some(u => u.value.trim())
   const hasAnyResult = Object.values(validations).some(v => !v.loading && v.messages !== null)
-  const allChecked = BROWSERS.every(b => browsers[b.id])
-  const someChecked = BROWSERS.some(b => browsers[b.id])
 
   const handleAudit = async () => {
     if (!hasAnyUrl) return
@@ -2617,15 +2620,6 @@ function AuditPanel({ type }) {
         <div className="audit-browser-section">
           <div className="audit-browser-header">
             <span className="audit-browser-label">브라우저 캡쳐</span>
-            <label className="audit-browser-all">
-              <input
-                type="checkbox"
-                checked={allChecked}
-                ref={el => { if (el) el.indeterminate = someChecked && !allChecked }}
-                onChange={toggleAll}
-              />
-              전체 선택
-            </label>
           </div>
           <div className="audit-browser-list">
             {BROWSERS.map(b => (
@@ -2711,7 +2705,7 @@ function AuditPanel({ type }) {
         <button
           className="audit-run-btn"
           onClick={handleAudit}
-          disabled={loading || !hasAnyUrl || (isStandard && !someChecked)}
+          disabled={loading || !hasAnyUrl || (isStandard && !BROWSERS.some(b => browsers[b.id]))}
         >
           {loading ? '검사 중...' : '검사 시작'}
         </button>
