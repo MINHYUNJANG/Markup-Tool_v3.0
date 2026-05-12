@@ -82,34 +82,34 @@ async function visionToJson(geminiKey, groqKey, imagePart) {
   const prompt = '이 웹 디자인 시안을 분석하여 레이아웃 JSON을 출력하라. 텍스트를 한 글자도 빠짐없이 그대로 복사하고 구조·색상·수치를 정확히 추출하라. JSON만 출력. 설명 금지.';
   if (geminiKey) {
     try {
-      return await callGemini(geminiKey, LAYOUT_SYSTEM, [imagePart, { text: prompt }], 4096);
+      return await callGemini(geminiKey, LAYOUT_SYSTEM, [imagePart, { text: prompt }], 8192);
     } catch (e) {
       if (!e.isQuota) throw e;
       console.warn('[image-markup] Gemini 할당량 초과 → Groq vision 폴백');
     }
   }
   if (!groqKey) throw new Error('GEMINI_API_KEY 또는 GROQ_API_KEY가 필요합니다.');
-  return callGroqVision(groqKey, LAYOUT_SYSTEM, imagePart, prompt, 4096);
+  return callGroqVision(groqKey, LAYOUT_SYSTEM, imagePart, prompt, 8192);
 }
 
 function extractJson(raw) {
-  let text = raw.trim();
+  // 코드펜스 제거 (닫힌 경우 + 잘린 경우 모두)
+  let text = raw.trim()
+    .replace(/^```(?:json)?\s*\n?/, '')
+    .replace(/\n?```\s*$/, '')
+    .trim();
 
-  // 1) 코드펜스 제거 (greedy)
-  const fenced = text.match(/```(?:json)?\s*\n?([\s\S]+?)\n?```/s);
-  if (fenced) text = fenced[1].trim();
-
-  // 2) 그대로 파싱 시도
+  // 1) 그대로 파싱
   try { return JSON.parse(text); } catch {}
 
-  // 3) 첫 번째 { ... } 블록 추출 (응답에 설명 텍스트가 섞인 경우)
+  // 2) { ... } 블록 추출 (앞뒤 설명 텍스트 제거)
   const objStart = text.indexOf('{');
   const objEnd   = text.lastIndexOf('}');
   if (objStart !== -1 && objEnd > objStart) {
     try { return JSON.parse(text.slice(objStart, objEnd + 1)); } catch {}
   }
 
-  // 4) 배열 형태 [ ... ] → sections 래핑
+  // 3) [ ... ] → sections 래핑
   const arrStart = text.indexOf('[');
   const arrEnd   = text.lastIndexOf(']');
   if (arrStart !== -1 && arrEnd > arrStart) {
@@ -119,7 +119,32 @@ function extractJson(raw) {
     } catch {}
   }
 
+  // 4) 잘린 JSON 복구: 열린 괄호를 역순으로 닫기
+  const base = objStart !== -1 ? text.slice(objStart) : text;
+  try { return JSON.parse(repairJson(base)); } catch {}
+
   throw new Error(`JSON 파싱 실패 (응답 앞부분: ${text.slice(0, 120)})`);
+}
+
+function repairJson(s) {
+  const stack = [];
+  let inStr = false, esc = false;
+  let lastBalanced = 0;
+
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\' && inStr) { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{' || c === '[') stack.push(c);
+    else if (c === '}' || c === ']') {
+      if (stack.length) { stack.pop(); if (!stack.length) lastBalanced = i + 1; }
+    }
+  }
+
+  const tail = stack.reverse().map(c => c === '{' ? '}' : ']').join('');
+  return s.slice(0, lastBalanced || s.length) + tail;
 }
 
 /* ─────────────────────────────────────────
