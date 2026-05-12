@@ -2090,9 +2090,8 @@ function ImageMarkupPanel() {
   const fileInputRef = useRef(null)
 
   const LOADING_STEPS = [
-    '1단계: 시안 스캔 중...',
-    '2단계: 시안 원본과 대조 검증 중...',
-    '3단계: 마크업 & CSS 생성 중...',
+    '1단계: 레이아웃 구조 분석 중...',
+    '2단계: HTML & CSS 생성 중...',
   ]
 
   const hasResult = !!(markupHtml || markupCss)
@@ -2153,9 +2152,8 @@ ${markupHtml}
     setMarkupHtml('')
     setMarkupCss('')
 
-    // 단계별 메시지 전환 (스캔 ~15s → 검증 ~15s → 생성)
-    const stepTimer = setTimeout(() => setLoadingStep(1), 15000)
-    const stepTimer2 = setTimeout(() => setLoadingStep(2), 30000)
+    // 단계별 메시지 전환 (분석 ~20s → 생성)
+    const stepTimer = setTimeout(() => setLoadingStep(1), 20000)
 
     try {
       const formData = new FormData()
@@ -2173,7 +2171,6 @@ ${markupHtml}
       setError(e.message)
     } finally {
       clearTimeout(stepTimer)
-      clearTimeout(stepTimer2)
       setLoading(false)
     }
   }
