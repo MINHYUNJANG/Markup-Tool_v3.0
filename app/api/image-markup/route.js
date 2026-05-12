@@ -152,10 +152,14 @@ function repairJson(s) {
    이미지 → 레이아웃 구조화 JSON
 ───────────────────────────────────────── */
 const LAYOUT_SYSTEM = `You are a precise web layout analyzer.
-Scan the design image and output a JSON object describing every content section.
+Scan the ENTIRE design image from top to bottom and output a JSON object describing EVERY region.
 
-SKIP: global navigation (GNB), header bar, LNB, footer, breadcrumbs.
-START from the first main content area, scan downward.
+INCLUDE ALL regions:
+- header: logo, site name, top navigation (GNB), search bar, utility links
+- main content sections: main-visual, quick-menu, card-grid, notice-board, tab-board, banner, gallery, etc.
+- footer: address, links, copyright, family-site selector, etc.
+
+DO NOT skip any region. Scan everything visible.
 
 ACCURACY RULES:
 - Copy every text CHARACTER BY CHARACTER. Never invent, translate, or paraphrase.
@@ -169,7 +173,7 @@ OUTPUT — JSON object only (no markdown, no explanation):
   "sections": [
     {
       "idx": 1,
-      "type": "main-visual | card-grid | notice-board | quick-menu | tab-board | banner | gallery | accordion | calendar | form | text-content",
+      "type": "header | footer | main-visual | card-grid | notice-board | quick-menu | tab-board | banner | gallery | accordion | calendar | form | text-content",
       "name": "short english label",
       "isSlider": false,
       "slideCount": 0,
