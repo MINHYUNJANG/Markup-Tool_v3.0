@@ -151,7 +151,7 @@ function repairJson(s) {
    Phase 1 시스템 프롬프트
    이미지 → 레이아웃 구조화 JSON
 ───────────────────────────────────────── */
-const LAYOUT_SYSTEM = `You are a precise web layout analyzer.
+const LAYOUT_SYSTEM = `You are a precise web layout analyzer for Korean 공공기관/교육기관 (public/educational institution) websites.
 Scan the ENTIRE design image from top to bottom and output a JSON object describing EVERY region.
 
 INCLUDE ALL regions:
@@ -159,16 +159,21 @@ INCLUDE ALL regions:
 - main content sections: main-visual, quick-menu, card-grid, notice-board, tab-board, banner, gallery, etc.
 - footer: address, links, copyright, family-site selector, etc.
 
-DO NOT skip any region. Scan everything visible.
+ANALYSIS RULES:
+1. Do NOT output flat structures — identify every semantic region precisely.
+2. Use semantic section types: header, footer, main-visual, quick-menu, card-grid, notice-board, tab-board, banner, gallery.
+3. Title elements: role "heading" with tag "h2" or "h3".
+4. Repeated content items → use "items" array (will be rendered as ul/li).
+5. Slider regions (◀▶ arrows or dot pagination) → isSlider: true, slideCount: N.
+6. Images → role: "image", text = meaningful alt description.
+7. Copy every text CHARACTER BY CHARACTER. Never invent, translate, or paraphrase.
+8. Count repeated elements by literally counting them in the image.
+9. Sample hex colors from actual pixels.
+10. Mark unreadable text as "[?]".
+11. DO NOT skip any region — scan everything visible top to bottom.
+12. Output JSON only — no markdown fences, no explanation.
 
-ACCURACY RULES:
-- Copy every text CHARACTER BY CHARACTER. Never invent, translate, or paraphrase.
-- Mark unreadable text as "[?]"
-- Count repeated elements by literally counting pixels
-- Sample hex colors from actual pixels
-- Sliders: section with ◀▶ arrows OR dot-pagination → isSlider:true
-
-OUTPUT — JSON object only (no markdown, no explanation):
+OUTPUT — JSON object only:
 {
   "sections": [
     {
