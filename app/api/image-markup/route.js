@@ -92,8 +92,34 @@ async function visionToJson(geminiKey, groqKey, imagePart) {
   return callGroqVision(groqKey, LAYOUT_SYSTEM, imagePart, prompt, 4096);
 }
 
-function stripJsonFence(raw) {
-  return raw.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/s, '$1');
+function extractJson(raw) {
+  let text = raw.trim();
+
+  // 1) 코드펜스 제거 (greedy)
+  const fenced = text.match(/```(?:json)?\s*\n?([\s\S]+?)\n?```/s);
+  if (fenced) text = fenced[1].trim();
+
+  // 2) 그대로 파싱 시도
+  try { return JSON.parse(text); } catch {}
+
+  // 3) 첫 번째 { ... } 블록 추출 (응답에 설명 텍스트가 섞인 경우)
+  const objStart = text.indexOf('{');
+  const objEnd   = text.lastIndexOf('}');
+  if (objStart !== -1 && objEnd > objStart) {
+    try { return JSON.parse(text.slice(objStart, objEnd + 1)); } catch {}
+  }
+
+  // 4) 배열 형태 [ ... ] → sections 래핑
+  const arrStart = text.indexOf('[');
+  const arrEnd   = text.lastIndexOf(']');
+  if (arrStart !== -1 && arrEnd > arrStart) {
+    try {
+      const arr = JSON.parse(text.slice(arrStart, arrEnd + 1));
+      if (Array.isArray(arr)) return { sections: arr };
+    } catch {}
+  }
+
+  throw new Error(`JSON 파싱 실패 (응답 앞부분: ${text.slice(0, 120)})`);
 }
 
 /* ─────────────────────────────────────────
@@ -191,14 +217,17 @@ export async function POST(req) {
 
     /* Phase 1: 이미지 → 레이아웃 JSON */
     const rawJson = await visionToJson(geminiKey, groqKey, imagePart);
-    const layoutJsonStr = stripJsonFence(rawJson);
 
     let layoutJson;
     try {
-      layoutJson = JSON.parse(layoutJsonStr);
-    } catch {
-      return Response.json({ detail: '레이아웃 분석 결과를 파싱할 수 없습니다.' }, { status: 500 });
+      layoutJson = extractJson(rawJson);
+    } catch (e) {
+      console.error('[image-markup] JSON 파싱 실패:', e.message);
+      return Response.json({ detail: `레이아웃 분석 결과를 파싱할 수 없습니다. (${e.message})` }, { status: 500 });
     }
+
+    // sections 배열 보장
+    if (!layoutJson.sections) layoutJson = { sections: [] };
 
     /* Phase 2: JSON → 규칙 기반 HTML + CSS (코드) */
     const { html, css } = generateHtmlCss(layoutJson);
