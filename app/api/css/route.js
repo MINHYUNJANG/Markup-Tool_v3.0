@@ -3,96 +3,74 @@ import { chromium } from 'playwright';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-function xmlEscape(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function buildCssResultHtml(url, errorCount, warningCount) {
-  const hasErrors = errorCount > 0;
-  const navParts = [];
-  if (warningCount > 0) navParts.push(`<a href="#">경고 (${warningCount})</a>`);
-  navParts.push('<a href="#">검사 된 CSS</a>');
-
-  return `<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #000; background: #fff; }
-  .header { background: #005a9c; color: #fff; padding: 10px 20px; display: flex; align-items: center; gap: 12px; }
-  .header-logo { background: #fff; color: #005a9c; font-weight: bold; font-size: 12px; padding: 2px 5px; border: 2px solid #acd; line-height: 1.3; text-align: center; }
-  .header-logo .css { display: block; font-size: 10px; color: #888; }
-  .header-title { font-size: 20px; font-weight: bold; }
-  .subtitle { color: #005a9c; font-size: 13px; padding: 8px 16px 2px; font-weight: bold; }
-  .nav { padding: 2px 16px 8px; font-size: 13px; color: #555; }
-  .nav a { color: #005a9c; text-decoration: none; margin-right: 6px; }
-  .result-ok  { background: #cfc; border: 1px solid #090; padding: 8px 12px; margin: 6px 16px; font-weight: bold; font-size: 14px; color: #060; }
-  .result-err { background: #fdd; border: 1px solid #c00; padding: 8px 12px; margin: 6px 16px; font-weight: bold; font-size: 14px; color: #900; }
-  .info { padding: 4px 16px 8px; font-size: 13px; color: #555; }
-  hr { border: none; border-top: 1px solid #ccc; margin: 8px 16px 12px; }
-</style>
-</head>
-<body>
-  <div class="header">
-    <div class="header-logo">W3C<span class="css">CSS</span></div>
-    <span class="header-title">W3C CSS 검사 서비스</span>
-  </div>
-  <p class="subtitle">W3C CSS 검사 결과 ${xmlEscape(url)} (CSS 레벨 3 + SVG)</p>
-  <p class="nav">이동: ${navParts.join(', ')}</p>
-  ${hasErrors
-    ? `<p class="result-err">이 문서에서 오류가 발견됐습니다! 오류 ${errorCount}개${warningCount > 0 ? `, 경고 ${warningCount}개` : ''}</p>`
-    : `<p class="result-ok">축하합니다! 발견된 오류가 없습니다.</p>`}
-  <p class="info">이 문서는 다음 형식으로 검사되었습니다: CSS 레벨 3 + SVG</p>
-  <hr>
-</body>
-</html>`;
-}
-
 export async function POST(request) {
   let browser;
   try {
     const { url } = await request.json();
     if (!url) return Response.json({ detail: 'url은 필수입니다.' }, { status: 400 });
 
-    const validatorApiUrl =
-      `https://jigsaw.w3.org/css-validator/validator?uri=${encodeURIComponent(url)}&output=json`;
-
-    const res = await fetch(validatorApiUrl, {
+    // JSON API로 오류/경고 데이터 수집
+    const apiUrl = `https://jigsaw.w3.org/css-validator/validator?uri=${encodeURIComponent(url)}&output=json`;
+    const apiRes = await fetch(apiUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MarkupTool/1.0)' },
       signal: AbortSignal.timeout(30000),
     });
 
-    if (!res.ok) {
-      return Response.json({ detail: `CSS 검사기 응답 오류: ${res.status}` }, { status: 502 });
+    if (!apiRes.ok) {
+      return Response.json({ detail: `CSS 검사기 응답 오류: ${apiRes.status}` }, { status: 502 });
     }
 
-    const data = await res.json();
+    const data = await apiRes.json();
     const cssvalidation = data.cssvalidation ?? {};
     const result = cssvalidation.result ?? {};
 
     const errorCount = result.errorcount ?? 0;
     const warningCount = result.warningcount ?? 0;
 
-    // errors/warnings are direct arrays under cssvalidation
     let errors = cssvalidation.errors ?? [];
     let warnings = cssvalidation.warnings ?? [];
     if (!Array.isArray(errors)) errors = errors ? [errors] : [];
     if (!Array.isArray(warnings)) warnings = warnings ? [warnings] : [];
 
+    // 실제 W3C CSS Validator 페이지 캡처
+    // warning=0 으로 경고 목록 숨겨서 결과 상단만 깔끔하게 캡처
     let cssScreenshot = null;
     try {
-      const evidenceHtml = buildCssResultHtml(url, errorCount, warningCount);
+      const pageUrl = `https://jigsaw.w3.org/css-validator/validator?uri=${encodeURIComponent(url)}&lang=ko&warning=0`;
       browser = await chromium.launch({ headless: true });
-      const context = await browser.newContext({ viewport: { width: 1280, height: 600 } });
+      const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
       const page = await context.newPage();
-      await page.setContent(evidenceHtml, { waitUntil: 'load' });
+      await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(500);
+
+      // 경고 카운트가 있으면 워닝 수치는 별도로 알고 있으니, 페이지에서 불필요한 하단 콘텐츠 제거
+      await page.evaluate(() => {
+        // 검사 된 CSS 섹션(긴 표) 제거
+        const toRemove = [
+          '#results ~ *',       // results 이후 모든 형제
+          '.boxtitle',          // CSS 목록 박스 타이틀
+          'table.cssSource',    // 검사된 CSS 소스 테이블
+          '#footer',
+          'div.footer',
+          '#parsedSection',
+        ];
+        toRemove.forEach(sel => {
+          try { document.querySelectorAll(sel).forEach(el => el.remove()); } catch (_) {}
+        });
+        // results 이후 sibling 형제 제거
+        const results = document.getElementById('results');
+        if (results) {
+          let next = results.nextElementSibling;
+          while (next) {
+            const toDelete = next;
+            next = next.nextElementSibling;
+            toDelete.remove();
+          }
+        }
+      });
+
       const contentHeight = await page.evaluate(() => document.body.scrollHeight);
-      await page.setViewportSize({ width: 1280, height: contentHeight });
+      await page.setViewportSize({ width: 1280, height: Math.min(contentHeight, 1200) });
       const buf = await page.screenshot({ type: 'png', fullPage: false });
       cssScreenshot = buf.toString('base64');
     } catch (_) {
