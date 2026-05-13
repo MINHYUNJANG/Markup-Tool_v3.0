@@ -12,7 +12,8 @@
       "Bash(Remove-Item -Path \"c:\\\\Users\\\\CEO\\\\markup-tool_v3\\\\markup-tool-v2.0\\\\markup-tool\\\\app\\\\api\\\\figma-design\\\\route.js\" -Force)",
       "Bash(Remove-Item -Path \"c:\\\\Users\\\\CEO\\\\markup-tool_v3\\\\markup-tool-v2.0\\\\markup-tool\\\\app\\\\api\\\\figma-design\" -Force)",
       "Bash(Get-ChildItem -Force)",
-      "Bash(Select-Object Name, PSIsContainer)"
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(npx --yes acorn --ecma2020 --module lib/crawler.js)"
     ],
     "additionalDirectories": [
       "c:\\Users\\CEO\\markup-tool_v3\\markup-tool-v2.0\\markup-tool\\app\\api"

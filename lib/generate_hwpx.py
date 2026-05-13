@@ -231,11 +231,11 @@ def generate_hwpx(template_path, data):
     table_xmls[1] = tbl2
 
     ROW_SIZES = [
-        (12486, 20620, 35409, 20620),  # Row 2
-        (12486, 20620, 35409, 20620),  # Row 3
-        (12486, 20620, 35409, 20620),  # Row 4
-        (12486, 20054, 35409, 20054),  # Row 5
-        (12486, 20054, 35409, 20054),  # Row 6
+        (12486, 24000, 35409, 24000),  # Row 2
+        (12486, 24000, 35409, 24000),  # Row 3
+        (12486, 24000, 35409, 24000),  # Row 4
+        (12486, 24000, 35409, 24000),  # Row 5
+        (12486, 24000, 35409, 24000),  # Row 6
     ]
 
     # 테이블 3·4 원본 템플릿 보존 (URL 2+에서 재사용)
@@ -271,6 +271,7 @@ def generate_hwpx(template_path, data):
                 bid_str, bid_num, iw, ih = r
                 pw, ph = fit_image(iw, ih, cell_inner_w(47895), cell_inner_h(26912))
                 tbl = replace_cell_content(tbl, 0, 2, make_pic_run("3", bid_str, pw, ph, bid_num))
+        # Row 2: Nu Html Checker 캡쳐 (없으면 빈 셀), Row 3: 항상 빈 셀
         return tbl
 
     def fill_tbl4(tbl, item, num, browser_its):
@@ -307,9 +308,10 @@ def generate_hwpx(template_path, data):
         m = table_matches[i]
         result_xml = result_xml[:m.start()] + table_xmls[i] + result_xml[m.end():]
 
-    # === URL 2+: Table 3·4 쌍을 반복 생성하여 삽입 ===
+    # === URL 2+: 나(T3) 전체 먼저, 다(T4) 전체 나중에 ===
     if len(unique_items) > 1:
-        extra_xml = ""
+        t3_extra = ""
+        t4_extra = ""
         for idx, item in enumerate(unique_items[1:], start=2):
             item_url = item.get("url", "")
             browser_its = [it for it in items if it.get("url") == item_url]
@@ -317,19 +319,25 @@ def generate_hwpx(template_path, data):
             tbl3_n = fill_tbl3(tbl3_orig, item, idx)
             tbl4_n = fill_tbl4(tbl4_orig, item, idx, browser_its)
 
-            # pageBreak="0" → "1" 로 변경해 URL 그룹마다 페이지 나누기
-            pre3 = re.sub(r'pageBreak="\d+"', 'pageBreak="1"', tbl3_pre, count=1)
+            pre3 = re.sub(r'pageBreak="\d+"', 'pageBreak="0"', tbl3_pre, count=1)
             pre3 = re.sub(r' id="\d+"', ' id="0"', pre3, count=1)
             pre4 = re.sub(r' id="\d+"', ' id="0"', tbl4_pre, count=1)
-            sep  = re.sub(r' id="\d+"', ' id="0"', sep_34, count=1)
 
-            extra_xml += pre3 + tbl3_n + tbl3_post + sep + pre4 + tbl4_n + tbl4_post
+            t3_extra += pre3 + tbl3_n + tbl3_post
+            t4_extra += pre4 + tbl4_n + tbl4_post
 
-        # result_xml 에서 Table 4의 </hp:p> 위치 찾아 extra_xml 삽입
+        # T3 extras: T3(1) 뒤에 삽입
         tbl_ends = [m.end() for m in re.finditer(r'</hp:tbl>', result_xml)]
-        if len(tbl_ends) >= 4:
-            insert_pos = result_xml.find('</hp:p>', tbl_ends[3]) + len('</hp:p>')
-            result_xml = result_xml[:insert_pos] + extra_xml + result_xml[insert_pos:]
+        if len(tbl_ends) >= 3:
+            insert_t3 = result_xml.find('</hp:p>', tbl_ends[2]) + len('</hp:p>')
+            result_xml = result_xml[:insert_t3] + t3_extra + result_xml[insert_t3:]
+
+        # T4 extras: T4(1) 뒤에 삽입 (T3 삽입 후 재탐색)
+        tbl_ends = [m.end() for m in re.finditer(r'</hp:tbl>', result_xml)]
+        t4_idx = 2 + len(unique_items)  # T1=0, T2=1, T3들, T4(1)
+        if len(tbl_ends) > t4_idx:
+            insert_t4 = result_xml.find('</hp:p>', tbl_ends[t4_idx]) + len('</hp:p>')
+            result_xml = result_xml[:insert_t4] + t4_extra + result_xml[insert_t4:]
 
     # === content.hpf: BinData 항목을 manifest에 등록 ===
     if bin_items:
