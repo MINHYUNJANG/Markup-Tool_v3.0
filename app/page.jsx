@@ -2769,9 +2769,14 @@ function AuditPanel({ type }) {
         return
       }
       const blob = await res.blob()
+      const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\. /g, '').replace('.', '')
+      const seqKey = `hwpx_seq_${today}`
+      const seq = (parseInt(localStorage.getItem(seqKey) || '0') + 1)
+      localStorage.setItem(seqKey, String(seq))
+      const seqStr = String(seq).padStart(3, '0')
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = 'webstandard_inspection.hwpx'
+      a.download = `웹 호환성 점검 결과서_증적_${today}_${seqStr}.hwpx`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -2894,7 +2899,7 @@ function AuditPanel({ type }) {
             onClick={handleDownload}
             disabled={loading}
           >
-            파일 다운로드
+            웹표준 증적보고서 다운로드
           </button>
         )}
       </div>
