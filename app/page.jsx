@@ -1912,9 +1912,12 @@ function FigmaPanel() {
 function FigmaUrlPanel() {
   const [figmaUrl, setFigmaUrl] = useState('')
   const [figmaUrlError, setFigmaUrlError] = useState('')
+  const [projectName, setProjectName] = useState('')
+  const [markupType, setMarkupType] = useState('html')
   const [loading, setLoading] = useState(false)
   const [htmlResult, setHtmlResult] = useState('')
   const [cssResult, setCssResult] = useState('')
+  const [jsxResult, setJsxResult] = useState('')
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('html')
   const [copied, setCopied] = useState(false)
@@ -1923,9 +1926,24 @@ function FigmaUrlPanel() {
   const [loadingEdit, setLoadingEdit] = useState(false)
   const [editError, setEditError] = useState('')
 
-  const hasResult = htmlResult || cssResult
-  const currentContent = activeTab === 'html' ? htmlResult : cssResult
-  const setCurrentContent = (v) => activeTab === 'html' ? setHtmlResult(v) : setCssResult(v)
+  const isReact = markupType === 'react'
+  const hasResult = isReact ? (jsxResult || cssResult) : (htmlResult || cssResult)
+
+  const currentContent = activeTab === 'html' ? htmlResult : activeTab === 'jsx' ? jsxResult : cssResult
+  const setCurrentContent = v => {
+    if (activeTab === 'html') setHtmlResult(v)
+    else if (activeTab === 'jsx') setJsxResult(v)
+    else setCssResult(v)
+  }
+
+  const handleMarkupTypeChange = type => {
+    setMarkupType(type)
+    setHtmlResult('')
+    setCssResult('')
+    setJsxResult('')
+    setError('')
+    setActiveTab(type === 'react' ? 'jsx' : 'html')
+  }
 
   const handleGenerate = async () => {
     if (!figmaUrl) { setFigmaUrlError('Figma URL을 입력해주세요.'); return }
@@ -1935,17 +1953,25 @@ function FigmaUrlPanel() {
     setError('')
     setHtmlResult('')
     setCssResult('')
+    setJsxResult('')
     try {
-      const res = await fetch(`${API_BASE}/figma-full`, {
+      const res = await fetch(`${API_BASE}/figma-accurate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: figmaUrl }),
+        body: JSON.stringify({ url: figmaUrl, markup_type: markupType, project_name: projectName }),
+        signal: AbortSignal.timeout(200000),
       })
       const data = await safeJson(res)
       if (!res.ok) throw new Error(data.detail || '마크업 생성 실패')
-      setHtmlResult(data.html || '')
-      setCssResult(data.css || '')
-      setActiveTab('html')
+      if (markupType === 'react') {
+        setJsxResult(data.jsx || '')
+        setCssResult(data.css || '')
+        setActiveTab('jsx')
+      } else {
+        setHtmlResult(data.html || '')
+        setCssResult(data.css || '')
+        setActiveTab('html')
+      }
     } catch (e) {
       setError(e.message)
     } finally {
@@ -1979,15 +2005,53 @@ function FigmaUrlPanel() {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>${cssResult}</style>
+<style>
+html, body { margin: 0; padding: 0; overflow: auto; }
+${cssResult}
+</style>
 </head>
-<body style="margin:0;padding:20px">
+<body>
 ${htmlResult}
 </body>
 </html>`
 
+  const editPlaceholder = activeTab === 'css'
+    ? '예: 배경색을 #f5f5f5로 바꿔줘'
+    : activeTab === 'jsx'
+      ? '예: 버튼 텍스트를 "시작하기"로 바꿔줘'
+      : '예: 버튼 텍스트를 "시작하기"로 바꿔줘'
+
   return (
     <div className="input-section">
+      {/* 프로젝트명 */}
+      <div className="input-group">
+        <label>프로젝트명</label>
+        <input
+          type="text"
+          value={projectName}
+          onChange={e => setProjectName(e.target.value)}
+          placeholder="프로젝트 이름을 입력하세요"
+          style={{ fontSize: '0.85rem', padding: '10px 14px', height: '48px' }}
+        />
+      </div>
+
+      {/* 마크업 종류 */}
+      <div className="input-group">
+        <label>마크업 종류</label>
+        <div className="figma-variant-btns" style={{ marginTop: '6px' }}>
+          {[{ value: 'html', label: 'HTML' }, { value: 'react', label: 'React' }].map(opt => (
+            <button
+              key={opt.value}
+              className={`variant-btn${markupType === opt.value ? ' active' : ''}`}
+              onClick={() => handleMarkupTypeChange(opt.value)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Figma URL */}
       <div className="input-group">
         <label>Figma URL</label>
         <input
@@ -2013,15 +2077,24 @@ ${htmlResult}
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 0', color: '#888' }}>
           <div className="spinner" />
-          <span>Figma 디자인 분석 중... (잠시 기다려주세요)</span>
+          <span>Figma 스타일 데이터 추출 중... (색상·폰트·여백 정밀 분석 → {isReact ? 'JSX' : 'HTML'}+CSS 생성)</span>
         </div>
       )}
 
       {hasResult && (
         <div className="result-section">
           <div className="tabs">
-            <button className={activeTab === 'html' ? 'tab active' : 'tab'} onClick={() => setActiveTab('html')}>HTML</button>
-            <button className={activeTab === 'css' ? 'tab active' : 'tab'} onClick={() => setActiveTab('css')}>CSS</button>
+            {isReact ? (
+              <>
+                <button className={activeTab === 'jsx' ? 'tab active' : 'tab'} onClick={() => setActiveTab('jsx')}>JSX</button>
+                <button className={activeTab === 'css' ? 'tab active' : 'tab'} onClick={() => setActiveTab('css')}>CSS</button>
+              </>
+            ) : (
+              <>
+                <button className={activeTab === 'html' ? 'tab active' : 'tab'} onClick={() => setActiveTab('html')}>HTML</button>
+                <button className={activeTab === 'css' ? 'tab active' : 'tab'} onClick={() => setActiveTab('css')}>CSS</button>
+              </>
+            )}
           </div>
           <div className="tab-content" style={{ padding: 0, border: 'none' }}>
             <div className="markup-result">
@@ -2029,7 +2102,12 @@ ${htmlResult}
                 <button className={`copy-btn${copied ? ' copied' : ''}`} onClick={handleCopy}>
                   {copied ? '복사됨 ✓' : '복사'}
                 </button>
-                <button className="preview-btn" onClick={() => setShowPreview(true)}>미리보기</button>
+                {!isReact && (
+                  <button className="preview-btn" onClick={() => setShowPreview(true)}>미리보기</button>
+                )}
+                {isReact && activeTab === 'css' && (
+                  <button className="preview-btn" onClick={() => setShowPreview(true)}>CSS 미리보기</button>
+                )}
               </div>
               <textarea
                 className="markup-editor"
@@ -2046,7 +2124,7 @@ ${htmlResult}
                     type="text"
                     value={editPrompt}
                     onChange={e => setEditPrompt(e.target.value)}
-                    placeholder={activeTab === 'html' ? '예: 버튼 텍스트를 "시작하기"로 바꿔줘' : '예: 배경색을 #f5f5f5로 바꿔줘'}
+                    placeholder={editPlaceholder}
                     onKeyDown={e => e.key === 'Enter' && !loadingEdit && handleEdit()}
                     disabled={loadingEdit}
                   />
@@ -2064,7 +2142,7 @@ ${htmlResult}
         <div className="modal-overlay" onClick={() => setShowPreview(false)}>
           <div className="modal-container" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <span>미리보기 (HTML + CSS)</span>
+              <span>미리보기{projectName ? ` — ${projectName}` : ''} ({isReact ? 'CSS' : 'HTML + CSS'})</span>
               <button className="modal-close" onClick={() => setShowPreview(false)}>✕</button>
             </div>
             <iframe className="modal-iframe" srcDoc={previewSrcDoc} />
