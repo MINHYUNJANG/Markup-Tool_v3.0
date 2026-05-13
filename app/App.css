@@ -803,7 +803,7 @@ body {
 }
 
 .audit-w3c-rem-pre {
-  font-family: 'Consolas', 'Menlo', monospace;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   white-space: pre-wrap;
   background: none;
   padding: 0;

@@ -45,11 +45,11 @@ export async function POST(request) {
 
       // 경고 카운트가 있으면 워닝 수치는 별도로 알고 있으니, 페이지에서 불필요한 하단 콘텐츠 제거
       await page.evaluate(() => {
-        // 검사 된 CSS 섹션(긴 표) 제거
+        // results 이후 형제 및 불필요한 섹션 제거
         const toRemove = [
-          '#results ~ *',       // results 이후 모든 형제
-          '.boxtitle',          // CSS 목록 박스 타이틀
-          'table.cssSource',    // 검사된 CSS 소스 테이블
+          '#results ~ *',
+          '.boxtitle',
+          'table.cssSource',
           '#footer',
           'div.footer',
           '#parsedSection',
@@ -57,7 +57,6 @@ export async function POST(request) {
         toRemove.forEach(sel => {
           try { document.querySelectorAll(sel).forEach(el => el.remove()); } catch (_) {}
         });
-        // results 이후 sibling 형제 제거
         const results = document.getElementById('results');
         if (results) {
           let next = results.nextElementSibling;
@@ -66,6 +65,11 @@ export async function POST(request) {
             next = next.nextElementSibling;
             toDelete.remove();
           }
+          // results 내 오류·경고 상세 목록 제거 (요약 배너만 남김)
+          const innerRemove = ['#errors', '#warnings', '.error-list', '.warning-list', 'dl', 'table'];
+          innerRemove.forEach(sel => {
+            try { results.querySelectorAll(sel).forEach(el => el.remove()); } catch (_) {}
+          });
         }
       });
 

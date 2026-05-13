@@ -252,7 +252,8 @@ def generate_hwpx(template_path, data):
 
     tbl3_pre  = section_xml[tbl3_p_start:m3_orig.start()]   # <hp:p...> ~ <hp:tbl 직전
     tbl3_post = section_xml[m3_orig.end():tbl3_p_end]        # </hp:tbl> ~ </hp:p>
-    tbl4_pre  = section_xml[tbl4_p_start:m4_orig.start()]
+    tbl4_pre_orig = section_xml[tbl4_p_start:m4_orig.start()]
+    tbl4_pre  = re.sub(r'pageBreak="\d+"', 'pageBreak="1"', tbl4_pre_orig, count=1)
     tbl4_post = section_xml[m4_orig.end():tbl4_p_end]
     sep_34    = section_xml[tbl3_p_end:tbl4_p_start]         # "웹 호환성 점검 결과" 단락
 
@@ -314,6 +315,9 @@ def generate_hwpx(template_path, data):
     for i in range(len(table_matches) - 1, -1, -1):
         m = table_matches[i]
         result_xml = result_xml[:m.start()] + table_xmls[i] + result_xml[m.end():]
+
+    # tbl4 단락에 pageBreak="1" 적용 (URL 1)
+    result_xml = result_xml.replace(tbl4_pre_orig, tbl4_pre, 1)
 
     # === URL 2+: 나(T3) 전체 먼저, 다(T4) 전체 나중에 ===
     if len(unique_items) > 1:
