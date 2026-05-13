@@ -231,11 +231,11 @@ def generate_hwpx(template_path, data):
     table_xmls[1] = tbl2
 
     ROW_SIZES = [
-        (12486, 24000, 35409, 24000),  # Row 2
-        (12486, 24000, 35409, 24000),  # Row 3
-        (12486, 24000, 35409, 24000),  # Row 4
-        (12486, 24000, 35409, 24000),  # Row 5
-        (12486, 24000, 35409, 24000),  # Row 6
+        (12486, 20000, 35409, 20000),  # Row 2
+        (12486, 20000, 35409, 20000),  # Row 3
+        (12486, 20000, 35409, 20000),  # Row 4
+        (12486, 20000, 35409, 20000),  # Row 5
+        (12486, 20000, 35409, 20000),  # Row 6
     ]
 
     # 테이블 3·4 원본 템플릿 보존 (URL 2+에서 재사용)
@@ -271,7 +271,14 @@ def generate_hwpx(template_path, data):
                 bid_str, bid_num, iw, ih = r
                 pw, ph = fit_image(iw, ih, cell_inner_w(47895), cell_inner_h(26912))
                 tbl = replace_cell_content(tbl, 0, 2, make_pic_run("3", bid_str, pw, ph, bid_num))
-        # Row 2: Nu Html Checker 캡쳐 (없으면 빈 셀), Row 3: 항상 빈 셀
+        # Row 3: CSS 검사 결과 캡쳐
+        css_ss = item.get("css_screenshot")
+        if css_ss:
+            r = add_bin(css_ss)
+            if r:
+                bid_str, bid_num, iw, ih = r
+                pw, ph = fit_image(iw, ih, cell_inner_w(47895), cell_inner_h(26912))
+                tbl = replace_cell_content(tbl, 0, 3, make_pic_run("3", bid_str, pw, ph, bid_num))
         return tbl
 
     def fill_tbl4(tbl, item, num, browser_its):

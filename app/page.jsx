@@ -2452,6 +2452,67 @@ function W3cResult({ validation, onToggle, onOpenLightbox }) {
   )
 }
 
+function CssResult({ validation, onToggle, onOpenLightbox }) {
+  if (!validation || validation.loading) {
+    return (
+      <div className="audit-w3c-loading">
+        <span className="audit-thumb-spinner" />
+        <span>CSS 검사 중...</span>
+      </div>
+    )
+  }
+  if (validation.error) {
+    return <div className="audit-w3c-fetch-error">CSS 검사 실패: {validation.error}</div>
+  }
+  const { errors = [], warnings = [], errorCount = 0, warningCount = 0, cssScreenshot } = validation
+  return (
+    <div className="audit-w3c-result">
+      <button className="audit-w3c-summary" onClick={onToggle}>
+        {errorCount === 0 ? (
+          <span className="audit-w3c-ok">CSS 오류 없음 ✓</span>
+        ) : (
+          <>
+            <span className="audit-w3c-tag audit-w3c-tag--error">CSS 오류 {errorCount}</span>
+            {warningCount > 0 && <span className="audit-w3c-tag audit-w3c-tag--warning">경고 {warningCount}</span>}
+          </>
+        )}
+        <span className="audit-w3c-chevron">{validation.open ? '▲' : '▼'}</span>
+      </button>
+      {validation.open && errors.length > 0 && (
+        <ul className="audit-w3c-list">
+          {errors.map((err, i) => (
+            <li key={i} className="audit-w3c-msg audit-w3c-msg--error">
+              <span className="audit-w3c-msg-badge">CSS 오류</span>
+              <div className="audit-w3c-msg-body">
+                <p className="audit-w3c-msg-text">{err.message}</p>
+                {err.context && <span className="audit-w3c-msg-loc">선택자: {err.context}</span>}
+                {err.property && <span className="audit-w3c-msg-loc">속성: {err.property}</span>}
+                {err.source && <span className="audit-w3c-msg-loc">파일: {err.source}</span>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {validation.open && errors.length === 0 && (
+        <>
+          <p className="audit-w3c-empty">CSS 오류가 없습니다.{warningCount > 0 ? ` (경고 ${warningCount}개)` : ''}</p>
+          {cssScreenshot && (
+            <div className="audit-w3c-evidence">
+              <span className="audit-w3c-evidence-label">CSS 검사 결과 화면</span>
+              <img
+                className="audit-w3c-evidence-thumb"
+                src={`data:image/png;base64,${cssScreenshot}`}
+                alt="CSS validator 결과 캡처"
+                onClick={() => onOpenLightbox(`data:image/png;base64,${cssScreenshot}`)}
+              />
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 function AuditPanel({ type }) {
   const isStandard = type === 'standard'
   const title = isStandard ? '웹표준 증적검사' : '웹접근성 증적검사'
@@ -2465,6 +2526,7 @@ function AuditPanel({ type }) {
   const [loading, setLoading] = useState(false)
   const [auditProgress, setAuditProgress] = useState({ done: 0, total: 0, phase: '' })
   const [validations, setValidations] = useState({})
+  const [cssValidations, setCssValidations] = useState({})
   const [screenshots, setScreenshots] = useState({})
   const [lightbox, setLightbox] = useState(null)
   const nextId = useRef(6)
@@ -2490,6 +2552,7 @@ function AuditPanel({ type }) {
     if (urls.length <= 1) return
     setUrls(prev => prev.filter(u => u.id !== id))
     setValidations(prev => { const n = { ...prev }; delete n[id]; return n })
+    setCssValidations(prev => { const n = { ...prev }; delete n[id]; return n })
     setScreenshots(prev => {
       const next = { ...prev }
       BROWSERS.forEach(b => delete next[`${id}-${b.id}`])
@@ -2503,6 +2566,13 @@ function AuditPanel({ type }) {
 
   const toggleValidationOpen = (id) => {
     setValidations(prev => ({
+      ...prev,
+      [id]: { ...prev[id], open: !prev[id]?.open },
+    }))
+  }
+
+  const toggleCssOpen = (id) => {
+    setCssValidations(prev => ({
       ...prev,
       [id]: { ...prev[id], open: !prev[id]?.open },
     }))
@@ -2522,12 +2592,17 @@ function AuditPanel({ type }) {
     const totalScreenshots = activeUrls.length * selectedBrowsers.length
     const grandTotal = activeUrls.length + totalScreenshots
     setLoading(true)
-    setAuditProgress({ done: 0, total: grandTotal, phase: 'W3C 검사 중' })
+    setAuditProgress({ done: 0, total: grandTotal, phase: 'W3C/CSS 검사 중' })
 
-    // W3C 검사 로딩 초기화
+    // W3C HTML + CSS 검사 로딩 초기화
     setValidations(prev => {
       const patch = {}
       activeUrls.forEach(u => { patch[u.id] = { loading: true, messages: null, error: null, open: false } })
+      return { ...prev, ...patch }
+    })
+    setCssValidations(prev => {
+      const patch = {}
+      activeUrls.forEach(u => { patch[u.id] = { loading: true, errors: [], warnings: [], error: null, open: false } })
       return { ...prev, ...patch }
     })
 
@@ -2544,37 +2619,52 @@ function AuditPanel({ type }) {
       })
     }
 
-    // W3C 검사 병렬 실행
+    // W3C HTML + CSS 검사 병렬 실행
     let w3cDone = 0
     await Promise.all(
       activeUrls.map(async (u) => {
-        try {
-          const res = await fetch('/api/w3c', {
+        const url = u.value.trim()
+        const [htmlRes, cssRes] = await Promise.allSettled([
+          fetch('/api/w3c', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: u.value.trim() }),
-          })
-          const data = await res.json()
-          if (!res.ok) throw new Error(data.detail || 'W3C 검사 실패')
+            body: JSON.stringify({ url }),
+          }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.detail || 'W3C 검사 실패'); return d }),
+          fetch('/api/css', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url }),
+          }).then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.detail || 'CSS 검사 실패'); return d }),
+        ])
+
+        if (htmlRes.status === 'fulfilled') {
+          const d = htmlRes.value
           setValidations(prev => ({
             ...prev,
-            [u.id]: {
-              loading: false,
-              messages: data.messages ?? [],
-              error: null,
-              open: false,
-              validatorScreenshot: data.validatorScreenshot ?? null,
-            },
+            [u.id]: { loading: false, messages: d.messages ?? [], error: null, open: false, validatorScreenshot: d.validatorScreenshot ?? null },
           }))
-        } catch (e) {
+        } else {
           setValidations(prev => ({
             ...prev,
-            [u.id]: { loading: false, messages: null, error: e.message, open: false },
+            [u.id]: { loading: false, messages: null, error: htmlRes.reason.message, open: false },
           }))
-        } finally {
-          w3cDone++
-          setAuditProgress({ done: w3cDone, total: grandTotal, phase: 'W3C 검사 중' })
         }
+
+        if (cssRes.status === 'fulfilled') {
+          const d = cssRes.value
+          setCssValidations(prev => ({
+            ...prev,
+            [u.id]: { loading: false, errors: d.errors ?? [], warnings: d.warnings ?? [], errorCount: d.errorCount ?? 0, warningCount: d.warningCount ?? 0, cssScreenshot: d.cssScreenshot ?? null, error: null, open: false },
+          }))
+        } else {
+          setCssValidations(prev => ({
+            ...prev,
+            [u.id]: { loading: false, errors: [], warnings: [], error: cssRes.reason.message, open: false },
+          }))
+        }
+
+        w3cDone++
+        setAuditProgress({ done: w3cDone, total: grandTotal, phase: 'W3C/CSS 검사 중' })
       })
     )
 
@@ -2635,6 +2725,8 @@ function AuditPanel({ type }) {
       const errCount = messages.filter(m => m.type === 'error').length
       const warnCount = messages.filter(m => m.type === 'warning' || m.type === 'info').length
       const validatorSs = val?.validatorScreenshot ?? null
+      const cssVal = cssValidations[u.id]
+      const cssSs = cssVal?.cssScreenshot ?? null
 
       if (selectedBrowsers.length === 0) {
         items.push({
@@ -2643,6 +2735,7 @@ function AuditPanel({ type }) {
           w3c_error_count: errCount,
           w3c_warning_count: warnCount,
           validator_screenshot: validatorSs,
+          css_screenshot: cssSs,
           screenshot: null,
         })
       } else {
@@ -2657,6 +2750,7 @@ function AuditPanel({ type }) {
             w3c_error_count: errCount,
             w3c_warning_count: warnCount,
             validator_screenshot: validatorSs,
+            css_screenshot: cssSs,
             screenshot: shotB64,
           })
         }
@@ -2743,6 +2837,15 @@ function AuditPanel({ type }) {
                   />
                 </div>
               )}
+              {cssValidations[u.id] && (
+                <div className="audit-url-result-wrap">
+                  <CssResult
+                    validation={cssValidations[u.id]}
+                    onToggle={() => toggleCssOpen(u.id)}
+                    onOpenLightbox={(dataUrl) => setLightbox({ dataUrl, label: 'CSS 검사 결과', url: u.value })}
+                  />
+                </div>
+              )}
 
               {urlShots.length > 0 && (
                 <div className="audit-thumb-row">
@@ -2755,6 +2858,7 @@ function AuditPanel({ type }) {
                       ) : b.shot.error ? (
                         <div className="audit-thumb-error" title={b.shot.error}>
                           <span>✕</span>
+                          <span className="audit-thumb-error-msg">{b.shot.error}</span>
                         </div>
                       ) : (
                         <img
